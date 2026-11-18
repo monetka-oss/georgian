@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Грузинский</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0E6E68">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Грузинский">
+<style>
+:root{color-scheme:light dark;--bg:#EEF2F1;--sf:#fff;--ink:#12201E;--mu:#5B6F6C;--ln:#CBD7D4;--ac:#0E6E68;--ai:#fff;--ok:#1E7B46;--bad:#B3261E}
+@media(prefers-color-scheme:dark){:root{--bg:#0E1514;--sf:#16201E;--ink:#E4EDEB;--mu:#8FA5A1;--ln:#263431;--ac:#5CC8BC;--ai:#08201D;--ok:#6FD39A;--bad:#FF8A80}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:18px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+header,main{max-width:640px;margin:0 auto;padding:0 16px}
+header{display:flex;align-items:center;gap:8px;min-height:56px}
+h1{font-size:1.2rem;margin:0}
+h2{font-size:.95rem;color:var(--mu);font-weight:500;margin:28px 0 8px}
+button,input{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+#back{background:none;border:0;color:var(--ac);padding:8px 8px 8px 0;min-height:44px}
+.row,.opt,.btn,input{display:block;width:100%;min-height:52px;margin:0 0 8px;padding:12px 16px;text-align:left;
+  background:var(--sf);border:1px solid var(--ln);border-radius:10px}
+.row{display:flex;justify-content:space-between;align-items:center}
+.row small{color:var(--mu)}
+.btn{background:var(--ac);color:var(--ai);border-color:var(--ac);text-align:center;font-weight:600}
+.opt.ok,.ok{color:var(--ok);border-color:var(--ok)}
+.opt.bad,.bad{color:var(--bad);border-color:var(--bad)}
+p.ok,p.bad{border:0}
+.ka{font-family:"Noto Sans Georgian",system-ui,sans-serif;font-size:1.7rem;line-height:1.3;display:block}
+.item{padding:14px 0;border-bottom:1px solid var(--ln)}
+.item span,.item small{display:block}
+.item small,.cnt,.ctx{color:var(--mu);font-size:.9rem}
+.cnt{margin:8px 0}
+.ask{font-size:1.5rem;margin:8px 0 20px}
+.card{display:flex;flex-direction:column;justify-content:center;gap:12px;width:100%;min-height:min(50vh,320px);margin-bottom:12px;
+  padding:24px;text-align:left;background:var(--sf);border:1px solid var(--ln);border-radius:10px}
+.card .ru{font-size:1.6rem}
+input[type=search],#a{margin-bottom:16px}
+.ka.big{font-size:2.2rem}
+</style>
+</head>
+<body>
+<header><button id="back" hidden>‹ Назад</button><h1 id="h"></h1></header>
+<main id="m"></main>
+<script src="lib.js"></script>
+<script>
+const FILES = ['data/part1.md', 'data/part2.md'];
+const $ = s => document.querySelector(s), m = $('#m'), h = $('#h'), backBtn = $('#back');
+const esc = s => s.replace(/[&<>"]/g, c => '&#' + c.charCodeAt() + ';');
+const row = q => `<div class="item"><b class="ka">${esc(q.ka)}</b><span>${esc(q.ru)}</span>${q.ctx ? `<small>${esc(q.ctx)}</small>` : ''}</div>`;
+let chapters = [], onBack = null;
+backBtn.onclick = () => onBack && onBack();
+
+function view(title, html, up) {
+  h.textContent = title; m.innerHTML = html; m.onclick = null;
+  onBack = up; backBtn.hidden = !up; scrollTo(0, 0);
+}
+
+function home() {
+  view('Грузинский', `<input id="q" type="search" placeholder="Поиск: грузинский или русский"><div id="res"></div><div id="list">` +
+    chapters.map((c, ci) => `<h2>${esc(c.title)}</h2>` + c.levels.map((l, li) =>
+      `<button class="row" data-c="${ci}" data-l="${li}"><span>${esc(l.name)}</span><small>${l.items.length}</small></button>`).join('')).join('') + '</div>');
+  const all = chapters.flatMap(c => c.levels.flatMap(l => l.items));
+  $('#q').oninput = e => {
+    const t = e.target.value.trim().toLowerCase();
+    $('#list').hidden = !!t;
+    $('#res').innerHTML = t ? all.filter(q => (q.ka + ' ' + q.ru).toLowerCase().includes(t)).map(row).join('') || '<p class="cnt">Ничего не найдено</p>' : '';
+  };
+  m.onclick = e => { const b = e.target.closest('[data-c]'); if (b) level(+b.dataset.c, +b.dataset.l); };
+}
+
+function level(c, l) {
+  const lv = chapters[c].levels[l];
+  view(lv.name, ['list|Список', 'cards|Карточки', 'choice|Выбор ответа', 'type|Ввод перевода'].map(s => {
+    const [k, t] = s.split('|'); return `<button class="row" data-k="${k}"><span>${t}</span></button>`;
+  }).join(''), home);
+  m.onclick = e => {
+    const k = e.target.closest('[data-k]')?.dataset.k;
+    if (k === 'list') view(lv.name, lv.items.map(row).join(''), () => level(c, l));
+    else if (k === 'cards') cards(c, l);
+    else if (k) quiz(c, l, k);
+  };
+}
+
+function cards(c, l) {
+  const lv = chapters[c].levels[l], d = shuffle(lv.items); let i = 0, f = false;
+  const draw = () => {
+    const q = d[i];
+    view(lv.name, `<p class="cnt">${i + 1} / ${d.length}</p><button class="card" id="cd">` +
+      (f ? `<span class="ka big">${esc(q.ka)}</span><span class="ctx">${esc(q.ctx)}</span>` : `<span class="ru">${esc(q.ru)}</span>`) +
+      `</button><button class="btn" id="nx">Дальше</button>`, () => level(c, l));
+    $('#cd').onclick = () => { f = !f; draw(); };
+    $('#nx').onclick = () => { i = (i + 1) % d.length; f = false; draw(); };
+  };
+  draw();
+}
+
+function quiz(c, l, mode) {
+  const lv = chapters[c].levels[l], pool = chapters[c].levels.flatMap(x => x.items);
+  const qs = shuffle(mode === 'type' ? lv.items.filter(typable) : lv.items), up = () => level(c, l);
+  let i = 0, score = 0;
+  const end = () => {
+    view(lv.name, `<p class="ask">${score} из ${qs.length}</p><button class="btn" id="again">Ещё раз</button>`, up);
+    $('#again').onclick = () => quiz(c, l, mode);
+  };
+  const ask = () => {
+    const q = qs[i];
+    view(lv.name, `<p class="cnt">${i + 1} / ${qs.length}</p><p class="ask">${esc(q.ru)}</p>` +
+      (mode === 'choice' ? options(q, pool).map(x => `<button class="opt">${esc(x.ka)}</button>`).join('')
+        : `<input id="a" lang="ka" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="По-грузински"><button class="btn" id="ok">Проверить</button>`) +
+      `<div id="fb"></div>`, up);
+    const finish = good => {
+      score += good;
+      $('#fb').innerHTML = `<p class="${good ? 'ok' : 'bad'}" id="msg">${good ? 'Верно' : 'Правильно: <span class="ka">' + esc(q.ka) + '</span>'}</p>` +
+        (good ? '' : mode === 'type' ? '<button class="opt" id="ov">Засчитать</button>' : '') +
+        `<button class="btn" id="nx">${i + 1 === qs.length ? 'Результат' : 'Дальше'}</button>`;
+      $('#nx').onclick = () => (++i < qs.length ? ask() : end());
+      const ov = $('#ov');
+      if (ov) ov.onclick = () => { score++; $('#msg').className = 'ok'; $('#msg').textContent = 'Верно'; ov.remove(); };
+    };
+    if (mode === 'choice') m.onclick = e => {
+      const b = e.target.closest('.opt'); if (!b || b.disabled) return;
+      m.querySelectorAll('.opt').forEach(o => { o.disabled = true; if (o.textContent === q.ka) o.classList.add('ok'); });
+      if (b.textContent !== q.ka) b.classList.add('bad');
+      finish(b.textContent === q.ka);
+    };
+    else {
+      const a = $('#a'), go = () => { a.disabled = true; $('#ok').remove(); finish(check(q.ka, a.value)); };
+      $('#ok').onclick = go; a.onkeydown = e => e.key === 'Enter' && go(); a.focus();
+    }
+  };
+  qs.length ? ask() : end();
+}
+
+Promise.all(FILES.map(f => fetch(f).then(r => r.ok ? r.text() : Promise.reject(f)).then(parse)))
+  .then(x => { chapters = x; home(); })
+  .catch(f => view('Ошибка', `<p>Не удалось загрузить ${esc(String(f))}. Откройте приложение по адресу сайта, а не как файл с диска.</p>`));
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>
