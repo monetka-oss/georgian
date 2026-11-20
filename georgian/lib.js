@@ -1,22 +1,33 @@
-const strip = s => s.replace(/\*+/g, '').trim();
+const clean = s => s.replace(/<br\s*\/?>/g, ' ').replace(/\*+/g, '').trim();
+const cells = l => l.trim().slice(1, -1).split('|').map(s => s.trim());
 
 function parse(md) {
-  const lines = md.split('\n');
-  const title = (lines.find(l => l.startsWith('# ')) || '').slice(2).trim();
-  const levels = [];
-  let cur;
+  const lines = md.split('\n'), levels = [];
+  const title = clean((lines.find(l => l.startsWith('# ')) || '').slice(2)).replace(/^[^\p{L}\p{N}]+/u, '');
+  let head = '', cur = null, hdr = null;
+  const add = (name, it) => {
+    if (!cur || cur.name !== name) levels.push(cur = { name, items: [] });
+    cur.items.push(it);
+  };
   for (const l of lines) {
-    if (!l.startsWith('|') || /^\|\s*:?-/.test(l) || l.startsWith('| Категория')) continue;
-    const [cat, ka, , ru, ctx = ''] = l.trim().slice(1, -1).split('|').map(strip);
-    if (cat || !cur) levels.push(cur = { name: cat, items: [] });
-    cur.items.push({ ka, ru, ctx });
+    if (!l.startsWith('|')) { hdr = null; if (l.startsWith('## ')) head = clean(l.slice(3)).replace(/^\d+\.\s*/, ''); continue; }
+    if (!hdr) { hdr = cells(l).map(clean); continue; }
+    if (/^\|\s*:?-/.test(l)) continue;
+    const c = cells(l), t = hdr.findIndex(h => /Транскрипц/.test(h));
+    if (t < 0) { // спряжение: значение | я | ты | он | пример
+      const ctx = clean(c[c.length - 1]);
+      for (let p = 1; p < c.length - 1; p++)
+        add(head, { ka: clean(c[p].split('<br>')[0]).replace(/\s*\([^)]*\)/g, ''),
+          ru: `${clean(c[0])} — ${hdr[p].replace(/\s*\(.*$/, '').toLowerCase()}`, ctx });
+    } else add(hdr[0] === 'Категория' ? clean(c[0]) || cur.name : head,
+      { ka: clean(c[t - 1]), ru: clean(c[t + 1]), ctx: clean(c[t + 2] || '') });
   }
   return { title, levels };
 }
 
 const norm = s => s.replace(/\([^)]*\)/g, '').toLowerCase()
   .replace(/[^\p{L}\p{N}\s]/gu, ' ').replace(/\s+/g, ' ').trim();
-const check = (ka, input) => ka.split('/').map(norm).filter(Boolean).includes(norm(input));
+const check = (ka, input) => [ka, ...ka.split('/')].map(norm).filter(Boolean).includes(norm(input));
 const typable = it => !/\[|\s\.\.\.\s/.test(it.ka);
 
 const shuffle = a => {

@@ -14,15 +14,15 @@ test('parse: уровни и количество строк', () => {
 });
 
 test('parse: разметка вычищена, поля не пустые', () => {
-  for (const f of ['part1', 'part2'])
+  for (const f of ['part1', 'part2', 'part3'])
     for (const it of load(f).levels.flatMap(l => l.items)) {
       assert.ok(it.ka && it.ru, `пустое поле: ${JSON.stringify(it)}`);
-      assert.ok(!/\*/.test(it.ka + it.ru + it.ctx), `осталась разметка: ${it.ka}`);
+      assert.ok(!/\*|<br/.test(it.ka + it.ru + it.ctx), `осталась разметка: ${it.ka}`);
     }
 });
 
 test('данные: в грузинском столбце нет кириллицы (кроме [Имя] и пояснений «(… — …)»)', () => {
-  for (const f of ['part1', 'part2'])
+  for (const f of ['part1', 'part2', 'part3'])
     for (const it of load(f).levels.flatMap(l => l.items))
       assert.ok(!/[а-яё]/i.test(it.ka.replace(/\[[^\]]*\]|\([^)]*—[^)]*\)/g, '')), `кириллица в: ${it.ka}`);
 });
@@ -50,4 +50,21 @@ test('options: 4 уникальных варианта, верный среди 
     assert.strictEqual(new Set(o.map(x => x.ka)).size, 4);
     assert.ok(o.some(x => x.ka === it.ka));
   }
+});
+
+test('parse: part3 (уровни = заголовки ##, глаголы по лицам)', () => {
+  const c = load('part3'), n = i => c.levels[i].items.length;
+  assert.ok(/^Уличный/.test(c.title), 'эмодзи в заголовке');
+  assert.deepStrictEqual(c.levels.map((_, i) => n(i)), [11, 51, 8, 11, 7, 4]);
+  assert.strictEqual(c.levels[0].name, 'Уважение, похвала и респект ровному типу');
+  const v = c.levels[1].items;
+  assert.deepStrictEqual(v[0], { ka: 'მესმის / მივხვდი', ru: 'Понимать / Догнать — я',
+    ctx: 'აზრზე ხარ, რას ვამბობ? (Сечешь, о чём я?)' });
+  assert.ok(v.some(x => x.ru === 'Лежать (вещи) — я' && x.ka === 'მიდევს'));
+  assert.ok(v.some(x => x.ru === 'Покупать — он / она' && x.ka === 'ყიდულობს'));
+});
+
+test('check: можно вписать вариант целиком, вместе со «/»', () => {
+  assert.ok(check('უფრო მუქი / უფრო ღია აქვთ?', 'უფრო მუქი / უფრო ღია აქვთ'));
+  assert.ok(check('უფრო მუქი / უფრო ღია აქვთ?', 'უფრო მუქი'));
 });
