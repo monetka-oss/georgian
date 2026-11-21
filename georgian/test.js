@@ -1,7 +1,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
-const { parse, check, typable, options } = require('./lib.js');
+const store = {};
+global.localStorage = { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); } };
+const L = require('./lib.js');
+const { parse, check, typable, options, phrase, buildable, srsGet, srsSet, srsDefault, srsUpdate, srsIsDue, srsDue, levelDone } = L;
 const load = f => parse(fs.readFileSync(`data/${f}.md`, 'utf8'));
 
 test('parse: уровни и количество строк', () => {
@@ -67,4 +70,47 @@ test('parse: part3 (уровни = заголовки ##, глаголы по л
 test('check: можно вписать вариант целиком, вместе со «/»', () => {
   assert.ok(check('უფრო მუქი / უფრო ღია აქვთ?', 'უფრო მუქი / უფრო ღია აქვთ'));
   assert.ok(check('უფრო მუქი / უფრო ღია აქვთ?', 'უფრო მუქი'));
+});
+
+test('options: шаблоны ([Имя], «...») не бывают дистракторами, варианты близки по длине', () => {
+  const lvls = load('part1').levels, pool = lvls.flatMap(l => l.items);
+  let d = 0, n = 0, base = 0;
+  for (const l of lvls) for (const it of l.items) for (let r = 0; r < 5; r++) {
+    const wrong = options(it, pool, l.items).filter(x => x !== it);
+    assert.ok(wrong.every(typable), `мусорный вариант для «${it.ru}»`);
+    wrong.forEach(w => { d += Math.abs(w.ka.length - it.ka.length); n++; });
+    base += pool.reduce((a, p) => a + Math.abs(p.ka.length - it.ka.length), 0) / pool.length * 3;
+  }
+  assert.ok(d / n < base / n / 3 * 0.6, 'дистракторы должны быть заметно ближе по длине, чем случайные');
+});
+
+test('phrase/buildable: первый вариант, без скобок; одно слово и шаблоны не собираются', () => {
+  assert.strictEqual(phrase({ ka: 'ვაიმე! / ვაიმე დედა!' }), 'ვაიმე!');
+  assert.strictEqual(phrase({ ka: 'რომ (в речи — რო)' }), 'რომ');
+  assert.ok(buildable({ ka: 'ბოლო ფასი რა არის?' }));
+  assert.ok(!buildable({ ka: 'ანუ' }));
+  assert.ok(!buildable({ ka: 'მე [Имя] მქვია, შენ?' }));
+});
+
+test('SRS: «Повторить» остаётся в повторении, «Знаю» растит интервал 1 → 3 → ×ease', () => {
+  const it = { ka: 'ტესტი', ru: 'тест' };
+  assert.ok(srsIsDue(srsGet(it)), 'новая фраза показывается в карточках');
+  let s = srsUpdate(srsDefault(), 1);
+  assert.strictEqual(s.status, 'learning'); assert.ok(srsIsDue(s));
+  s = srsUpdate(s, 3); assert.deepStrictEqual([s.status, s.interval], ['review', 1]); assert.ok(!srsIsDue(s));
+  s = srsUpdate(s, 3); assert.strictEqual(s.interval, 3);
+  s = srsUpdate(s, 3); assert.ok(s.interval >= 7);
+  assert.strictEqual(srsUpdate(s, 1).reps, 0);
+});
+
+test('srsDue: только «сложные» и просроченные, новые фразы не попадают', () => {
+  const [a, b, c, d] = ['a', 'b', 'c', 'd'].map(x => ({ ka: x, ru: x }));
+  srsSet(a, srsUpdate(srsDefault(), 1));                                  // сложная
+  srsSet(b, srsUpdate(srsDefault(), 3));                                  // знаю, срок не пришёл
+  srsSet(c, { ...srsUpdate(srsDefault(), 3), due: Date.now() - 1 });      // знаю, срок пришёл
+  const ch = [{ levels: [{ items: [a, b, c, d] }] }];
+  assert.deepStrictEqual(srsDue(ch).map(x => x.item.ka).sort(), ['a', 'c']);
+  assert.ok(!levelDone([a, b, c, d]));
+  srsSet(a, srsUpdate(srsGet(a), 3)); srsSet(d, srsUpdate(srsDefault(), 3));
+  assert.ok(levelDone([a, b, c, d]));
 });

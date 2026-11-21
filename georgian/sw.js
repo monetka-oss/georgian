@@ -1,4 +1,4 @@
-const C = 'ka-v2', F = ['./', 'index.html', 'lib.js', 'manifest.json', 'data/part1.md', 'data/part2.md', 'data/part3.md'];
+const C = 'ka-v3', F = ['./', 'index.html', 'lib.js', 'manifest.json', 'data/part1.md', 'data/part2.md', 'data/part3.md'];
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(caches.open(C).then(c => c.addAll(F)));
